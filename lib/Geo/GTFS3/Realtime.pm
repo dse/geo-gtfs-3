@@ -5,7 +5,7 @@ use strict;
 use HTTP::Cache::Transparent;
 use LWP::UserAgent;
 use Google::ProtocolBuffers;
-use JSON;
+use JSON qw(-convert_blessed_universally);
 use POSIX qw(strftime);
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
@@ -127,8 +127,7 @@ sub load_from_http_response {
     my $url = $response->base;
     my $cref = $response->content_ref;
     my $o = TransitRealtime::FeedMessage->decode($$cref);
-    print Dumper($o);
-    
+
     if ($self->{save_pb}) {
 	$self->save_pb($response, $o);
     }
@@ -142,7 +141,9 @@ sub load_from_http_response {
 
 sub json {
     my ($self) = @_;
-    return $self->{json} //= JSON->new()->allow_nonref()->pretty()->allow_blessed();
+    return $self->{json} if $self->{json};
+    $self->{json} = JSON->new()->pretty()->allow_blessed()->convert_blessed();
+    return $self->{json};
 }
 
 1;

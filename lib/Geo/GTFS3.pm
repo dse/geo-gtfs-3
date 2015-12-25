@@ -138,9 +138,10 @@ sub load_from_zip {
 		print STDERR ("  $rows rows\r");
 	    }
 	}
-	$self->dbh->commit();
 	print STDERR ("  loaded $rows rows.\n");
     }
+    $self->dbh->commit();
+    warn("Committed.\n");
 }
 
 sub get_instance {
@@ -170,7 +171,6 @@ sub create_instance {
     my $sth = $self->dbh->prepare($sql);
     $sth->execute($url, $last_modified, $length, $etag, $retrieved, $filename);
     my $id = $self->dbh->last_insert_id("", "", "", "");
-    $self->dbh->commit();
     return $id;
 }
 

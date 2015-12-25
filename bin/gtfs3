@@ -1,0 +1,51 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+use Geo::GTFS3;
+use Geo::GTFS3::Realtime;
+
+use Time::ParseDate qw(parsedate);
+use POSIX qw(strftime);
+
+my $gtfs3 = Geo::GTFS3->new();
+$gtfs3->{verbose} = 1;
+
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/google_transit.zip");
+
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transit%20AUG2012.zip");
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transitJAN2013.zip");
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transitJUN2013.zip");
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transitAUG2013.zip");
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transitJan2014.zip");
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transitJUN2014.zip");
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transitAUG2014.zip");
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transitJan2015.zip");
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transitJun2015).zip");
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transitAUG2015.zip");
+$gtfs3->load_from_url("http://googletransit.ridetarc.org/feed/OLD%20GFTS%20FEEDS/google_transit%20Aug2015.zip");
+
+sub next_date {
+    my ($date) = @_;
+    my $time_t = parsedate("$date");
+    my $tom_time_t = parsedate("tomorrow", NOW => $time_t);
+    return strftime("%Y-%m-%d", localtime($tom_time_t));
+}
+
+for (my $date = "2012-01-01";
+     $date lt "2016-07-01";
+     $date = next_date($date)) {
+    my ($instance_id, $service_id, $exception) = $gtfs3->get_instance_id_service_id("Transit Authority of River City", parsedate($date));
+    printf("%s: instance_id %d; service_id %d %s\n", $date // "-", $instance_id // -1, $service_id // -1, $exception ? "*" : " ");
+}
+
+my $rt = Geo::GTFS3::Realtime->new();
+$rt->{save_json} = 1;
+$rt->{save_pb} = 1;
+$rt->{verbose} = 1;
+$rt->{feed_type_name} = "all";
+$rt->{agency_name} = "Transit Authority of River City";
+$rt->load_from_url("http://googletransit.ridetarc.org/realtime/gtfs-realtime/TrapezeRealTimeFeed.pb");

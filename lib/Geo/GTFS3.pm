@@ -10,7 +10,7 @@ use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
 use Archive::Zip::MemberRead;
 use Digest::MD5 qw/md5_hex/;
 use File::Path qw(make_path);
-use Text::CSV;
+use Text::CSV_XS;
 use File::Basename qw(dirname basename);
 
 our @TABLES;
@@ -118,7 +118,7 @@ sub load_from_zip {
 	my $basename = basename($filename, ".txt");
 	my $table_name = "$basename";
 	my $fh = Archive::Zip::MemberRead->new($zip, $filename);
-	my $csv = Text::CSV->new ({ binary => 1 });
+	my $csv = Text::CSV_XS->new ({ binary => 1 });
 	my $fields = $csv->getline($fh);
 	die("no fields in member $filename of $filename\n")
 	  unless $fields or scalar(@$fields);

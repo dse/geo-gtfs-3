@@ -263,7 +263,7 @@ sub get_list_of_current_trips {
         where    t.instance_id = ? and t.service_id = ?
         group by t.trip_id
 	having   trip_departure_time <= ? and ? < trip_arrival_time
-	order by r.route_id, trip_departure_time
+	order by r.route_id, t.direction_id, trip_departure_time
     ";
     my $sth = $self->dbh->prepare($sql);
     my @rows;

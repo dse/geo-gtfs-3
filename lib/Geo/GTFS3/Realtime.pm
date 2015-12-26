@@ -9,6 +9,8 @@ use JSON qw(-convert_blessed_universally);
 use POSIX qw(strftime);
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
+use Data::Dumper;
+use YAML;
 
 sub new {
     my ($class) = @_;
@@ -90,7 +92,7 @@ sub load_from_url {
 	warn(sprintf("  %s\n", $response->base)) if $response->base ne $url;
 	warn(sprintf("  %s\n", $response->status_line));
     }
-    $self->load_from_http_response($response);
+    return $self->load_from_http_response($response);
 }
 
 sub save_pb {
@@ -127,7 +129,33 @@ sub save_json {
     print {$fh} $self->json->encode($o);
 }
 
-use Data::Dumper;
+sub save_dumper {
+    my ($self, $response, $o) = @_;
+    my $time = $o->{header}->{timestamp} // $response->last_modified // time();
+    my $base_filename = strftime("%Y/%m/%d/%H%M%SZ", gmtime($time));
+    my $dumper_filename = sprintf("%s/realtime-data/%s/%s/%s.dumper", $self->{dir}, $self->{agency_name}, $self->{feed_type_name}, $base_filename);
+    make_path(dirname($dumper_filename));
+    my $fh;
+    if (!open($fh, ">", $dumper_filename)) {
+	die("Cannot write $dumper_filename: $!\n");
+    }
+    binmode($fh);
+    print {$fh} Dumper($o);
+}
+
+sub save_yaml {
+    my ($self, $response, $o) = @_;
+    my $time = $o->{header}->{timestamp} // $response->last_modified // time();
+    my $base_filename = strftime("%Y/%m/%d/%H%M%SZ", gmtime($time));
+    my $yaml_filename = sprintf("%s/realtime-data/%s/%s/%s.yaml", $self->{dir}, $self->{agency_name}, $self->{feed_type_name}, $base_filename);
+    make_path(dirname($yaml_filename));
+    my $fh;
+    if (!open($fh, ">", $yaml_filename)) {
+	die("Cannot write $yaml_filename: $!\n");
+    }
+    binmode($fh);
+    print {$fh} Dump($o);
+}
 
 sub load_from_http_response {
     my ($self, $response) = @_;
@@ -146,6 +174,12 @@ sub load_from_http_response {
     }
     if ($self->{save_json}) {
 	$self->save_json($response, $o);
+    }
+    if ($self->{save_dumper}) {
+	$self->save_dumper($response, $o);
+    }
+    if ($self->{save_yaml}) {
+	$self->save_yaml($response, $o);
     }
 
     return ($o, $response) if wantarray;

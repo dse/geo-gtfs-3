@@ -702,6 +702,54 @@ sub output_select {
     print($tb->body);
 }
 
+sub get_list_of_current_trips {
+    my ($self, $agency_name, $time_t) = @_;
+    $time_t //= time();
+
+    my @localtime = localtime($time_t);
+    my ($hh, $mm, $ss) = @localtime[2, 1, 0];
+    my $hhmmss    = sprintf("%02d:%02d:%02d", $hh, $mm, $ss);
+    my $hhmmss_xm = sprintf("%02d:%02d:%02d", $hh + 24, $mm, $ss);
+
+    my ($instance_id,    $service_id   ) = $self->get_instance_id_service_id($agency_name, $time_t);
+    my ($instance_id_xm, $service_id_xm) = $self->get_instance_id_service_id($agency_name, parsedate("yesterday", NOW => $time_t));
+
+    my $sql = "
+        select   t.trip_id              as trip_id,
+                 min(st.departure_time) as trip_departure_time,
+                 max(st.arrival_time)   as trip_arrival_time,
+                 t.trip_headsign        as trip_headsign,
+                 t.trip_short_name      as trip_short_name,
+                 t.direction_id         as direction_id,
+                 t.block_id             as block_id,
+                 r.route_id             as route_id,
+                 r.route_short_name     as route_short_name,
+                 r.route_long_name      as route_long_name
+        from     stop_times st
+                 join trips t on st.trip_id = t.trip_id
+                                 and st.instance_id = t.instance_id
+                 join routes r on t.route_id = r.route_id
+                                  and t.instance_id = r.instance_id
+        where    t.service_id = ?
+                 and t.instance_id = ?
+        group by t.trip_id
+        having   trip_departure_time <= ? and ? < trip_arrival_time
+        order by r.route_id, trip_departure_time
+    ";
+
+    my @trips = ();
+    my $sth = $dbh->prepare($sql);
+    $sth->execute($service_id_xm, $instance_id_xm, $hhmmss_xm, $hhmmss_xm);
+    while (my $row = $sth->fetchrow_hashref()) {
+	push(@trips, $row);
+    }
+    $sth->execute($service_id, $instance_id, $hhmmss, $hhmmss);
+    while (my $row = $sth->fetchrow_hashref()) {
+	push(@trips, $row);
+    }
+    return @trips;
+}
+
 sub DESTROY {
     my ($self) = @_;
     $self->dbh->rollback() if $self->dbh;

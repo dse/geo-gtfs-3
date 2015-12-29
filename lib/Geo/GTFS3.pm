@@ -538,22 +538,25 @@ BEGIN {
 
 sub create_tables {
     my ($self) = @_;
+    warn("Creating tables...\n") if $self->{verbose};
     foreach my $table (@TABLES) {
 	if (exists $TABLES{$table}) {
 	    $self->create_table($TABLES{$table});
 	}
     }
+    warn("Done.\n") if $self->{verbose};
 }
 
 sub create_table {
     my ($self, $table) = @_;
-    warn("Creating table: $table ...\n");
+    warn("  Creating table: $table ...\n") if $self->{verbose} >= 2;
     $self->dbh->do($table);
-    warn("Done.\n");
+    warn("  Done.\n") if $self->{verbose} >= 2;
 }
 
 sub create_indexes {
     my ($self) = @_;
+    warn("Creating indexes...\n") if $self->{verbose};
     foreach my $table (@TABLES) {
 	if (exists $INDEXES{$table}) {
 	    foreach my $index (@{$INDEXES{$table}}) {
@@ -561,14 +564,15 @@ sub create_indexes {
 	    }
 	}
     }
+    warn("Done.\n") if $self->{verbose};
 }
 
 sub create_index {
     my ($self, $index) = @_;
-    warn("Creating index: $index ...\n");
+    warn("  Creating index: $index ...\n") if $self->{verbose} >= 2;
     $self->dbh->do($index);
     $self->dbh->commit();
-    warn("Done.\n");
+    warn("  Done.\n") if $self->{verbose} >= 2;
 }
 
 sub output_list_of_agencies {

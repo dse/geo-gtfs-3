@@ -264,20 +264,16 @@ sub get_list_of_current_trips {
 	having   trip_departure_time <= ? and ? < trip_arrival_time
 	order by r.route_id, trip_departure_time
     ";
-    warn("A\n");
     my $sth = $self->dbh->prepare($sql);
     my @rows;
     $sth->execute($instance_id_xm, $service_id_xm, $hhmmss_xm, $hhmmss_xm);
     while (my $row = $sth->fetchrow_hashref()) {
-	warn(".\n");
 	push(@rows, $row);
     }
     $sth->execute($instance_id, $service_id, $hhmmss, $hhmmss);
     while (my $row = $sth->fetchrow_hashref()) {
-	warn(".\n");
 	push(@rows, $row);
     }
-    warn("B\n");
     return @rows;
 }
 

@@ -12,6 +12,8 @@ use Digest::MD5 qw/md5_hex/;
 use File::Path qw(make_path);
 use Text::CSV_XS;
 use File::Basename qw(dirname basename);
+use IO::Handle;			# for STDERR->autoflush() call
+use POSIX qw(strftime);
 
 our @TABLES;
 our %TABLES;
@@ -94,8 +96,6 @@ sub load_from_http_response {
 	$self->load_from_zip($instance_id, $filename, $inactive);
     }
 }
-
-use IO::Handle;			# for STDERR->autoflush() call
 
 sub load_from_zip {
     my ($self, $instance_id, $filename, $inactive) = @_;
@@ -180,8 +180,6 @@ BEGIN {
     @WDAY_COLUMN_NAMES = qw(sunday monday tuesday wednesday thursday
 			    friday saturday);
 }
-
-use POSIX qw(strftime);
 
 sub get_instance_id_service_id {
     my ($self, $agency_name, $date) = @_;

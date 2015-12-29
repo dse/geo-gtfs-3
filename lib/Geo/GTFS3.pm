@@ -469,7 +469,7 @@ BEGIN {
     ";
     $INDEXES{fare_attributes} = [
         "create index if not exists fare_attributes__instance_id on fare_attributes(instance_id);",
-        "create index if not exists fare_attributes__instance_id on fare_attributes(fare_id);",
+        "create index if not exists fare_attributes__fare_id on fare_attributes(fare_id);",
     ];
     $TABLES{fare_rules} = "
         create table if not exists fare_rules (
@@ -497,8 +497,7 @@ BEGIN {
     $INDEXES{shapes} = [
         "create index if not exists shapes__instance_id       on shapes(instance_id);",
         "create index if not exists shapes__shape_id          on shapes(shape_id);",
-        "--create index if not exists shapes__shape_pt_sequence on shapes(shape_pt_sequence);",
-        "drop index if exists shapes__shape_pt_sequence;",
+        "create index if not exists shapes__shape_pt_sequence on shapes(shape_pt_sequence);",
     ];
     $TABLES{frequencies} = "
         create table if not exists frequencies (

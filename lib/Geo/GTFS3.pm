@@ -627,7 +627,7 @@ sub output_list_of_trips {
     say("Trip ID  Route                                     Depart   Arrive");
     say("-------- -------- -------------------------------- -------- --------");
     foreach my $trip (@trips) {
-	printf("%-8s %-8s %-32.32s %-4s %-8s %-8s\n",
+	printf("%-8s %-8s %-32.32s %-8s %-8s\n",
 	       $trip->{trip_id},
 	       $trip->{route_short_name},
 	       $trip->{trip_headsign},

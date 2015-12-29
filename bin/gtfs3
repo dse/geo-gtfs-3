@@ -1,0 +1,11 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+use Geo::GTFS3::App;
+my $app = Geo::GTFS3::App->new();
+$app->run(@ARGV);
+

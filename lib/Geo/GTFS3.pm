@@ -326,10 +326,10 @@ BEGIN {
 	    agency_fare_url       text           null
         );
     ";
-    $INDEXES{agency} = "
-        create index if not exists agency__instance_id on agency(instance_id);
-        create index if not exists agency__agency_id   on agency(agency_id);
-    ";
+    $INDEXES{agency} = [
+        "create index if not exists agency__instance_id on agency(instance_id);",
+        "create index if not exists agency__agency_id   on agency(agency_id);",
+    ];
     $TABLES{stops} = "
         create table if not exists stops (
             instance_id           integer    not null references instances(instance_id),
@@ -347,10 +347,10 @@ BEGIN {
             wheelchair_boarding   integer        null
         );
     ";
-    $INDEXES{stops} = "
-        create index if not exists stops__instance_id on stops(instance_id);
-        create index if not exists stops__stop_id     on stops(stop_id);
-    ";
+    $INDEXES{stops} = [
+        "create index if not exists stops__instance_id on stops(instance_id);",
+        "create index if not exists stops__stop_id     on stops(stop_id);",
+    ];
     $TABLES{routes} = "
         create table if not exists routes (
             instance_id           integer    not null references instances(instance_id),
@@ -365,12 +365,12 @@ BEGIN {
             route_text_color      varchar(6)     null
         );
     ";
-    $INDEXES{routes} = "
-        create index if not exists routes__instance_id on routes(instance_id);
-        create index if not exists routes__route_id    on routes(route_id);
-        create index if not exists routes__agency_id   on routes(agency_id);
-        create index if not exists routes__short_name  on routes(short_name);
-    ";
+    $INDEXES{routes} = [
+        "create index if not exists routes__instance_id on routes(instance_id);",
+        "create index if not exists routes__route_id    on routes(route_id);",
+        "create index if not exists routes__agency_id   on routes(agency_id);",
+        "create index if not exists routes__short_name  on routes(route_short_name);",
+    ];
     $TABLES{trips} = "
         create table if not exists trips (
             instance_id           integer    not null references instances(instance_id),
@@ -386,14 +386,14 @@ BEGIN {
             bikes_allowed         integer        null
         );
     ";
-    $INDEXES{trips} = "
-        create index if not exists trips__instance_id on trips(instance_id);
-        create index if not exists trips__route_id    on trips(route_id);
-        create index if not exists trips__service_id  on trips(service_id);
-        create index if not exists trips__trip_id     on trips(trip_id);
-        create index if not exists trips__block_id    on trips(block_id);
-        create index if not exists trips__block_id    on trips(shape_id);
-    ";
+    $INDEXES{trips} = [
+        "create index if not exists trips__instance_id on trips(instance_id);",
+        "create index if not exists trips__route_id    on trips(route_id);",
+        "create index if not exists trips__service_id  on trips(service_id);",
+        "create index if not exists trips__trip_id     on trips(trip_id);",
+        "create index if not exists trips__block_id    on trips(block_id);",
+        "create index if not exists trips__block_id    on trips(shape_id);",
+    ];
     $TABLES{stop_times} = "
         create table if not exists stop_times (
             instance_id           integer    not null references instances(instance_id),
@@ -409,12 +409,12 @@ BEGIN {
             timepoint             integer        null
         );
     ";
-    $INDEXES{stop_times} = "
-        create index if not exists stop_times__instance_id   on stop_times(instance_id);
-        create index if not exists stop_times__trip_id       on stop_times(trip_id);
-        create index if not exists stop_times__stop_id       on stop_times(stop_id);
-        create index if not exists stop_times__stop_sequence on stop_times(stop_sequence);
-    ";
+    $INDEXES{stop_times} = [
+        "create index if not exists stop_times__instance_id   on stop_times(instance_id);",
+        "create index if not exists stop_times__trip_id       on stop_times(trip_id);",
+        "create index if not exists stop_times__stop_id       on stop_times(stop_id);",
+        "create index if not exists stop_times__stop_sequence on stop_times(stop_sequence);",
+    ];
     $TABLES{calendar} = "
         create table if not exists calendar (
             instance_id           integer    not null references instances(instance_id),
@@ -430,18 +430,18 @@ BEGIN {
             end_date              varchar(8) not null
         );
     ";
-    $INDEXES{calendar} = "
-        create index if not exists calendar__instance_id on calendar(instance_id);
-        create index if not exists calendar__monday      on calendar(monday);
-        create index if not exists calendar__tuesday     on calendar(tuesday);
-        create index if not exists calendar__wednesday   on calendar(wednesday);
-        create index if not exists calendar__thursday    on calendar(thursday);
-        create index if not exists calendar__friday      on calendar(friday);
-        create index if not exists calendar__saturday    on calendar(saturday);
-        create index if not exists calendar__sunday      on calendar(sunday);
-        create index if not exists calendar__sunday      on calendar(start_date);
-        create index if not exists calendar__sunday      on calendar(end_date);
-    ";
+    $INDEXES{calendar} = [
+        "create index if not exists calendar__instance_id on calendar(instance_id);",
+        "create index if not exists calendar__monday      on calendar(monday);",
+        "create index if not exists calendar__tuesday     on calendar(tuesday);",
+        "create index if not exists calendar__wednesday   on calendar(wednesday);",
+        "create index if not exists calendar__thursday    on calendar(thursday);",
+        "create index if not exists calendar__friday      on calendar(friday);",
+        "create index if not exists calendar__saturday    on calendar(saturday);",
+        "create index if not exists calendar__sunday      on calendar(sunday);",
+        "create index if not exists calendar__sunday      on calendar(start_date);",
+        "create index if not exists calendar__sunday      on calendar(end_date);",
+    ];
     $TABLES{calendar_dates} = "
         create table if not exists calendar_dates (
             instance_id           integer    not null references instances(instance_id),
@@ -450,12 +450,12 @@ BEGIN {
             exception_type        integer    not null
         );
     ";
-    $INDEXES{calendar_dates} = "
-        create index if not exists calendar_dates__instance_id on calendar_dates(instance_id);
-        create index if not exists calendar_dates__instance_id on calendar_dates(service_id);
-        create index if not exists calendar_dates__instance_id on calendar_dates(`date`);
-        create index if not exists calendar_dates__instance_id on calendar_dates(exception_type);
-    ";
+    $INDEXES{calendar_dates} = [
+        "create index if not exists calendar_dates__instance_id on calendar_dates(instance_id);",
+        "create index if not exists calendar_dates__instance_id on calendar_dates(service_id);",
+        "create index if not exists calendar_dates__instance_id on calendar_dates(`date`);",
+        "create index if not exists calendar_dates__instance_id on calendar_dates(exception_type);",
+    ];
     $TABLES{fare_attributes} = "
         create table if not exists fare_attributes (
             instance_id           integer    not null references instances(instance_id),
@@ -467,10 +467,10 @@ BEGIN {
             transfer_duration     integer        null
         );
     ";
-    $INDEXES{fare_attributes} = "
-        create index if not exists fare_attributes__instance_id on fare_attributes(instance_id);
-        create index if not exists fare_attributes__instance_id on fare_attributes(fare_id);
-    ";
+    $INDEXES{fare_attributes} = [
+        "create index if not exists fare_attributes__instance_id on fare_attributes(instance_id);",
+        "create index if not exists fare_attributes__instance_id on fare_attributes(fare_id);",
+    ];
     $TABLES{fare_rules} = "
         create table if not exists fare_rules (
             instance_id           integer    not null references instances(instance_id),
@@ -481,9 +481,9 @@ BEGIN {
             contains_id           text           null
         );
     ";
-    $INDEXES{fare_rules} = "
-        create index if not exists fare_rules__instance_id on fare_rules(instance_id);
-    ";
+    $INDEXES{fare_rules} = [
+        "create index if not exists fare_rules__instance_id on fare_rules(instance_id);",
+    ];
     $TABLES{shapes} = "
         create table if not exists shapes (
             instance_id           integer    not null references instances(instance_id),
@@ -494,12 +494,12 @@ BEGIN {
             shape_dist_traveled   real           null
         );
     ";
-    $INDEXES{shapes} = "
-        create index if not exists shapes__instance_id       on shapes(instance_id);
-        create index if not exists shapes__shape_id          on shapes(shape_id);
-        --create index if not exists shapes__shape_pt_sequence on shapes(shape_pt_sequence);
-        drop index if exists shapes__shape_pt_sequence;
-    ";
+    $INDEXES{shapes} = [
+        "create index if not exists shapes__instance_id       on shapes(instance_id);",
+        "create index if not exists shapes__shape_id          on shapes(shape_id);",
+        "--create index if not exists shapes__shape_pt_sequence on shapes(shape_pt_sequence);",
+        "drop index if exists shapes__shape_pt_sequence;",
+    ];
     $TABLES{frequencies} = "
         create table if not exists frequencies (
             instance_id           integer    not null references instances(instance_id),
@@ -510,9 +510,9 @@ BEGIN {
             exact_times           integer        null
         );
     ";
-    $INDEXES{frequencies} = "
-        create index if not exists frequencies__instance_id on frequencies(instance_id);
-    ";
+    $INDEXES{frequencies} = [
+        "create index if not exists frequencies__instance_id on frequencies(instance_id);",
+    ];
     $TABLES{transfers} = "
         create table if not exists transfers (
             instance_id           integer    not null references instances(instance_id),
@@ -522,9 +522,9 @@ BEGIN {
             min_transfer_time     integer        null
         );
     ";
-    $INDEXES{transfers} = "
-        create index if not exists transfers__instance_id on transfers(instance_id);
-    ";
+    $INDEXES{transfers} = [
+        "create index if not exists transfers__instance_id on transfers(instance_id);",
+    ];
     $TABLES{feed_info} = "
         create table if not exists feed_info (
             instance_id           integer    not null references instances(instance_id),
@@ -536,33 +536,43 @@ BEGIN {
             feed_version          text           null
         );
     ";
-    $INDEXES{feed_info} = "
-        create index if not exists feed_info__instance_id on feed_info(instance_id);
-    ";
+    $INDEXES{feed_info} = [
+        "create index if not exists feed_info__instance_id on feed_info(instance_id);",
+    ];
 }
 
 sub create_tables {
     my ($self) = @_;
-    warn("Creating tables...\n");
     foreach my $table (@TABLES) {
 	if (exists $TABLES{$table}) {
-	    warn("  $table...\n");
-	    $self->dbh->do($TABLES{$table});
+	    $self->create_table($TABLES{$table});
 	}
     }
+}
+
+sub create_table {
+    my ($self, $table) = @_;
+    warn("Creating table: $table ...\n");
+    $self->dbh->do($table);
     warn("Done.\n");
 }
 
 sub create_indexes {
     my ($self) = @_;
-    warn("Creating indexes...\n");
     foreach my $table (@TABLES) {
 	if (exists $INDEXES{$table}) {
-	    warn("  $table...\n");
-	    $self->dbh->do($INDEXES{$table});
-	    $self->dbh->commit();
+	    foreach my $index (@{$INDEXES{$table}}) {
+		$self->create_index($index);
+	    }
 	}
     }
+}
+
+sub create_index {
+    my ($self, $index) = @_;
+    warn("Creating index: $index ...\n");
+    $self->dbh->do($index);
+    $self->dbh->commit();
     warn("Done.\n");
 }
 

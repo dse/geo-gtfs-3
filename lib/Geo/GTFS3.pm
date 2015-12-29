@@ -14,9 +14,13 @@ use Text::CSV_XS;
 use File::Basename qw(dirname basename);
 use IO::Handle;			# for STDERR->autoflush() call
 use POSIX qw(strftime);
+use Time::ParseDate qw(parsedate);
+
+use feature qw(say);
 
 our @TABLES;
 our %TABLES;
+our %INDEXES;
 
 sub new {
     my ($class) = @_;
@@ -43,6 +47,7 @@ sub dbh {
     $self->{dbh} = Geo::GTFS3::DBI->connect("dbi:SQLite:$dbfile", "", "",
 					    { RaiseError => 1, AutoCommit => 0 });
     $self->create_tables();
+    $self->create_indexes();
     return $self->{dbh};
 }
 
@@ -252,23 +257,27 @@ sub get_list_of_current_trips {
         from     stop_times st
                  join trips t on st.trip_id = t.trip_id
                                  and st.instance_id = t.instance_id
-		 join gtfs_routes r on t.route_id = r.route_id
-                                       and t.instance_id = r.instance_id
+		 join routes r on t.route_id = r.route_id
+                                  and t.instance_id = r.instance_id
         where    t.instance_id = ? and t.service_id = ?
         group by t.trip_id
 	having   trip_departure_time <= ? and ? < trip_arrival_time
 	order by r.route_id, trip_departure_time
     ";
+    warn("A\n");
     my $sth = $self->dbh->prepare($sql);
     my @rows;
     $sth->execute($instance_id_xm, $service_id_xm, $hhmmss_xm, $hhmmss_xm);
     while (my $row = $sth->fetchrow_hashref()) {
+	warn(".\n");
 	push(@rows, $row);
     }
     $sth->execute($instance_id, $service_id, $hhmmss, $hhmmss);
     while (my $row = $sth->fetchrow_hashref()) {
+	warn(".\n");
 	push(@rows, $row);
     }
+    warn("B\n");
     return @rows;
 }
 
@@ -316,6 +325,8 @@ BEGIN {
 	    agency_phone          text           null,
 	    agency_fare_url       text           null
         );
+    ";
+    $INDEXES{agency} = "
         create index if not exists agency__instance_id on agency(instance_id);
         create index if not exists agency__agency_id   on agency(agency_id);
     ";
@@ -335,6 +346,8 @@ BEGIN {
             stop_timezone         text           null,
             wheelchair_boarding   integer        null
         );
+    ";
+    $INDEXES{stops} = "
         create index if not exists stops__instance_id on stops(instance_id);
         create index if not exists stops__stop_id     on stops(stop_id);
     ";
@@ -351,6 +364,8 @@ BEGIN {
             route_color           varchar(6)     null,
             route_text_color      varchar(6)     null
         );
+    ";
+    $INDEXES{routes} = "
         create index if not exists routes__instance_id on routes(instance_id);
         create index if not exists routes__route_id    on routes(route_id);
         create index if not exists routes__agency_id   on routes(agency_id);
@@ -370,11 +385,14 @@ BEGIN {
             wheelchair_accessible integer        null,
             bikes_allowed         integer        null
         );
+    ";
+    $INDEXES{trips} = "
         create index if not exists trips__instance_id on trips(instance_id);
         create index if not exists trips__route_id    on trips(route_id);
         create index if not exists trips__service_id  on trips(service_id);
         create index if not exists trips__trip_id     on trips(trip_id);
         create index if not exists trips__block_id    on trips(block_id);
+        create index if not exists trips__block_id    on trips(shape_id);
     ";
     $TABLES{stop_times} = "
         create table if not exists stop_times (
@@ -390,11 +408,12 @@ BEGIN {
             shape_dist_traveled   real           null,
             timepoint             integer        null
         );
+    ";
+    $INDEXES{stop_times} = "
         create index if not exists stop_times__instance_id   on stop_times(instance_id);
         create index if not exists stop_times__trip_id       on stop_times(trip_id);
         create index if not exists stop_times__stop_id       on stop_times(stop_id);
-        --create index if not exists stop_times__stop_sequence on stop_times(stop_sequence);
-        drop index if exists stop_times__stop_sequence;
+        create index if not exists stop_times__stop_sequence on stop_times(stop_sequence);
     ";
     $TABLES{calendar} = "
         create table if not exists calendar (
@@ -410,6 +429,8 @@ BEGIN {
             start_date            varchar(8) not null,
             end_date              varchar(8) not null
         );
+    ";
+    $INDEXES{calendar} = "
         create index if not exists calendar__instance_id on calendar(instance_id);
         create index if not exists calendar__monday      on calendar(monday);
         create index if not exists calendar__tuesday     on calendar(tuesday);
@@ -418,15 +439,22 @@ BEGIN {
         create index if not exists calendar__friday      on calendar(friday);
         create index if not exists calendar__saturday    on calendar(saturday);
         create index if not exists calendar__sunday      on calendar(sunday);
+        create index if not exists calendar__sunday      on calendar(start_date);
+        create index if not exists calendar__sunday      on calendar(end_date);
     ";
     $TABLES{calendar_dates} = "
         create table if not exists calendar_dates (
             instance_id           integer    not null references instances(instance_id),
             service_id            text       not null,
-            date                  varchar(8) not null,
+            `date`                varchar(8) not null,
             exception_type        integer    not null
         );
+    ";
+    $INDEXES{calendar_dates} = "
         create index if not exists calendar_dates__instance_id on calendar_dates(instance_id);
+        create index if not exists calendar_dates__instance_id on calendar_dates(service_id);
+        create index if not exists calendar_dates__instance_id on calendar_dates(`date`);
+        create index if not exists calendar_dates__instance_id on calendar_dates(exception_type);
     ";
     $TABLES{fare_attributes} = "
         create table if not exists fare_attributes (
@@ -438,7 +466,10 @@ BEGIN {
             transfers             integer    not null,
             transfer_duration     integer        null
         );
+    ";
+    $INDEXES{fare_attributes} = "
         create index if not exists fare_attributes__instance_id on fare_attributes(instance_id);
+        create index if not exists fare_attributes__instance_id on fare_attributes(fare_id);
     ";
     $TABLES{fare_rules} = "
         create table if not exists fare_rules (
@@ -449,6 +480,8 @@ BEGIN {
             destination_id        text           null,
             contains_id           text           null
         );
+    ";
+    $INDEXES{fare_rules} = "
         create index if not exists fare_rules__instance_id on fare_rules(instance_id);
     ";
     $TABLES{shapes} = "
@@ -460,6 +493,8 @@ BEGIN {
             shape_pt_sequence     integer    not null,
             shape_dist_traveled   real           null
         );
+    ";
+    $INDEXES{shapes} = "
         create index if not exists shapes__instance_id       on shapes(instance_id);
         create index if not exists shapes__shape_id          on shapes(shape_id);
         --create index if not exists shapes__shape_pt_sequence on shapes(shape_pt_sequence);
@@ -474,6 +509,8 @@ BEGIN {
             headway_secs          integer    not null,
             exact_times           integer        null
         );
+    ";
+    $INDEXES{frequencies} = "
         create index if not exists frequencies__instance_id on frequencies(instance_id);
     ";
     $TABLES{transfers} = "
@@ -484,6 +521,8 @@ BEGIN {
             transfer_type         integer    not null,
             min_transfer_time     integer        null
         );
+    ";
+    $INDEXES{transfers} = "
         create index if not exists transfers__instance_id on transfers(instance_id);
     ";
     $TABLES{feed_info} = "
@@ -496,14 +535,96 @@ BEGIN {
             feed_end_date         varchar(8)     null,
             feed_version          text           null
         );
+    ";
+    $INDEXES{feed_info} = "
         create index if not exists feed_info__instance_id on feed_info(instance_id);
     ";
 }
 
 sub create_tables {
     my ($self) = @_;
+    warn("Creating tables...\n");
     foreach my $table (@TABLES) {
-	$self->dbh->do($TABLES{$table});
+	if (exists $TABLES{$table}) {
+	    warn("  $table...\n");
+	    $self->dbh->do($TABLES{$table});
+	}
+    }
+    warn("Done.\n");
+}
+
+sub create_indexes {
+    my ($self) = @_;
+    warn("Creating indexes...\n");
+    foreach my $table (@TABLES) {
+	if (exists $INDEXES{$table}) {
+	    warn("  $table...\n");
+	    $self->dbh->do($INDEXES{$table});
+	    $self->dbh->commit();
+	}
+    }
+    warn("Done.\n");
+}
+
+sub output_list_of_agencies {
+    my ($self) = @_;
+    my $sql = "
+        select agency_name, count(*) as count
+        from agency
+        group by agency_name
+        order by agency_name
+    ";
+    my $sth = $self->dbh->prepare($sql);
+    $sth->execute();
+    while (my $row = $sth->fetchrow_hashref()) {
+	say($row->{agency_name});
+    }
+}
+
+sub output_list_of_routes {
+    my ($self, $agency_name, $time_t) = @_;
+    $time_t //= time();
+
+    my ($instance_id, $service_id) = $self->get_instance_id_service_id($agency_name, $time_t);
+    my $sql = "
+        select r.route_id		as route_id,
+               r.route_short_name	as route_short_name,
+               r.route_long_name        as route_long_name,
+               r.route_desc             as route_desc,
+               r.route_type             as route_type,
+               r.route_url              as route_url,
+               r.route_color            as route_color,
+               r.route_text_color       as route_text_color,
+               a.agency_id              as agency_id,
+               a.agency_name            as agency_name
+        from   routes r
+                 join agency a on (r.agency_id = a.agency_id) || (r.agency_id is null and a.agency_id is null)
+                                  and r.instance_id = a.instance_id
+        where  r.instance_id = ?
+    ";
+    my $sth = $self->dbh->prepare($sql);
+    $sth->execute($instance_id);
+    while (my $row = $sth->fetchrow_hashref()) {
+	printf("%-8s %s\n", $row->{route_short_name}, $row->{route_long_name});
+    }
+}
+
+sub output_list_of_trips {
+    my ($self, $agency_name, $time_t) = @_;
+    $time_t //= time();
+
+    my @trips = $self->get_list_of_current_trips($agency_name, $time_t);
+
+    say("Trip ID  Route                                     Depart   Arrive");
+    say("-------- -------- -------------------------------- -------- --------");
+    foreach my $trip (@trips) {
+	printf("%-8s %-8s %-32.32s %-4s %-8s %-8s\n",
+	       $trip->{trip_id},
+	       $trip->{route_short_name},
+	       $trip->{trip_headsign},
+	       $trip->{trip_departure_time},
+	       $trip->{trip_arrival_time},
+	      );
     }
 }
 

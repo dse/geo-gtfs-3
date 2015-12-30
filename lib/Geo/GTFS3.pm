@@ -15,6 +15,7 @@ use File::Basename qw(dirname basename);
 use IO::Handle;			# for STDERR->autoflush() call
 use POSIX qw(strftime);
 use Time::ParseDate qw(parsedate);
+use Text::Table;
 
 use feature qw(say);
 
@@ -624,17 +625,81 @@ sub output_list_of_trips {
 
     my @trips = $self->get_list_of_current_trips($agency_name, $time_t);
 
-    say("Trip ID  Route                                     Depart   Arrive");
-    say("-------- -------- -------------------------------- -------- --------");
+    my $tb = Text::Table->new("Trip ID", "Route", "Headsign", "Depart", "Arrive");
     foreach my $trip (@trips) {
-	printf("%-8s %-8s %-32.32s %-8s %-8s\n",
-	       $trip->{trip_id},
-	       $trip->{route_short_name},
-	       $trip->{trip_headsign},
-	       $trip->{trip_departure_time},
-	       $trip->{trip_arrival_time},
-	      );
+	$tb->add(@{$trip}{qw(trip_id route_short_name trip_headsign trip_departure_time trip_arrival_time)});
     }
+    print($tb->title);
+    print($tb->rule("-"));
+    print($tb->body);
+}
+
+sub delete_instance {
+    my ($self, $instance_id) = @_;
+    warn("Deleting instance $instance_id ...\n") if $self->{verbose};
+    foreach my $table (@TABLES) {
+	warn("  Deleting instance $instance_id from $table ...\n") if $self->{verbose} >= 2;
+	my $sql = "
+            delete from $table where instance_id = ?;
+        ";
+	my $sth = $self->dbh->prepare($sql);
+	$sth->execute($instance_id);
+	$self->dbh->commit();
+	warn("  Done.\n") if $self->{verbose} >= 2;
+    }
+    warn("Done.\n") if $self->{verbose};
+}
+
+sub output_list_of_instances {
+    my ($self) = @_;
+    my $sql = "
+        select   i.instance_id   as instance_id,
+                 i.url           as url,
+                 i.modified      as modified,
+                 i.length        as length,
+                 i.etag          as etag,
+                 i.retrieved     as retrieved,
+                 i.filename      as filename,
+                 a.start_date    as start_date,
+                 a.end_date      as end_date
+        from     instances i
+                 join (
+                     select instance_id, min(start_date) as start_date, max(end_date) as end_date
+                     from (
+                         select instance_id, start_date, end_date
+                         from   calendar
+                         union  
+                         select instance_id, `date` as start_date, `date` as end_date
+                         from   calendar_dates
+                     )
+                     group by instance_id
+                 ) a on i.instance_id = a.instance_id
+        order by start_date,
+                 end_date
+    ";
+    $self->output_select($sql);
+}
+
+sub output_table {
+    my ($self, $table) = @_;
+    my $sql = "
+        select * from $table;
+    ";
+    $self->output_select($sql);
+}
+
+sub output_select {
+    my ($self, $sql, @args) = @_;
+    my $sth = $self->dbh->prepare($sql);
+    $sth->execute(@args);
+    my @name = @{$sth->{NAME}};
+    my $tb = Text::Table->new(@name);
+    while (my $row = $sth->fetchrow_arrayref) {
+	$tb->add(@$row);
+    }
+    print($tb->title);
+    print($tb->rule("-"));
+    print($tb->body);
 }
 
 sub DESTROY {

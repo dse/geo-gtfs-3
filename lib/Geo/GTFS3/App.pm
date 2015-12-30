@@ -3,6 +3,7 @@ use warnings;
 use strict;
 
 use Geo::GTFS3;
+use Geo::GTFS3::Realtime;
 
 sub new {
     my ($class) = @_;

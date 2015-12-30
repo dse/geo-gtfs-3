@@ -79,6 +79,7 @@ sub load_from_url {
 				     NoUpdateImpatient => 1 });
     my $request = HTTP::Request->new("GET", $url);
     my $response = $self->ua->request($request);
+    $self->{response} = $response;
     if (!$response->is_success) {
 	warn(sprintf("%s =>\n", $url)) if $url ne $response->base;
 	warn(sprintf("%s => %s\n", $response->base, $response->status_line));
@@ -94,6 +95,9 @@ sub load_from_url {
 
 sub save_pb {
     my ($self, $response, $o) = @_;
+    $response //= $self->{response};
+    $o //= $self->{data};
+
     my $time = $o->{header}->{timestamp} // $response->last_modified // time();
     my $base_filename = strftime("%Y/%m/%d/%H%M%SZ", gmtime($time));
     my $pb_filename = sprintf("%s/realtime-data/%s/%s/%s.pb", $self->{dir}, $self->{agency_name}, $self->{feed_type_name}, $base_filename);
@@ -108,6 +112,9 @@ sub save_pb {
 
 sub save_json {
     my ($self, $response, $o) = @_;
+    $response //= $self->{response};
+    $o //= $self->{data};
+
     my $time = $o->{header}->{timestamp} // $response->last_modified // time();
     my $base_filename = strftime("%Y/%m/%d/%H%M%SZ", gmtime($time));
     my $json_filename = sprintf("%s/realtime-data/%s/%s/%s.json", $self->{dir}, $self->{agency_name}, $self->{feed_type_name}, $base_filename);
@@ -124,9 +131,15 @@ use Data::Dumper;
 
 sub load_from_http_response {
     my ($self, $response) = @_;
+    $response //= $self->{response};
+
     my $url = $response->base;
     my $cref = $response->content_ref;
     my $o = TransitRealtime::FeedMessage->decode($$cref);
+
+    $self->{pb} = $$ccref;
+    $self->{data} = $o;
+    $self->{json} = $self->json->encode($o);
 
     if ($self->{save_pb}) {
 	$self->save_pb($response, $o);

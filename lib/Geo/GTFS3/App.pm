@@ -16,6 +16,7 @@ sub options {
     return (
 	"verbose|v" => sub {
 	    $self->gtfs3->{verbose} += 1;
+	    $self->realtime->{verbose} += 1;
 	}
        );
 }
@@ -28,6 +29,7 @@ commands:
   gtfs3 list-routes AGENCYNAME [DATE]
   gtfs3 list-instances
   gtfs3 delete-instances INSTANCEID [...]
+  gtfs3 realtime-json URL
 END
 
 COMMAND("load", sub {
@@ -64,6 +66,12 @@ sub cmd__delete_instances {
     }
 }
 
+sub cmd__realtime_json {
+    my ($self, $url) = @_;
+    $self->realtime->load_from_url($url);
+    print($self->realtime->{data_json});
+}
+
 #------------------------------------------------------------------------------
 
 sub gtfs3 {
@@ -71,6 +79,13 @@ sub gtfs3 {
     return $self->{gtfs3} if $self->{gtfs3};
     $self->{gtfs3} = Geo::GTFS3->new();
     return $self->{gtfs3};
+}
+
+sub realtime {
+    my ($self) = @_;
+    return $self->{realtime} if $self->{realtime};
+    $self->{realtime} = Geo::GTFS3::Realtime->new();
+    return $self->{realtime};
 }
 
 #------------------------------------------------------------------------------

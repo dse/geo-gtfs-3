@@ -11,18 +11,29 @@ sub new {
     return $self;
 }
 
-sub cmd__help { print(<<"END"); }
+sub options {
+    my ($self) = @_;
+    return (
+	"verbose|v" => sub {
+	    $self->gtfs3->{verbose} += 1;
+	}
+       );
+}
+
+COMMAND("help", sub { print(<<"END"); });
 commands:
   gtfs3 help
   gtfs3 list-agencies
   gtfs3 load FEEDURL
   gtfs3 list-routes AGENCYNAME [DATE]
+  gtfs3 list-instances
+  gtfs3 delete-instances INSTANCEID [...]
 END
 
-sub cmd__load {
-    my ($self, $url) = @_;
-    $self->gtfs3->load_from_url($url);
-}
+COMMAND("load", sub {
+	    my ($self, $url) = @_;
+	    $self->gtfs3->load_from_url($url);
+	});
 
 sub cmd__list_agencies {
     my ($self) = @_;
@@ -39,6 +50,20 @@ sub cmd__list_trips {
     $self->gtfs3->output_list_of_trips($agency_name, $date);
 }
 
+sub cmd__list_instances {
+    my ($self) = @_;
+    $self->gtfs3->output_list_of_instances();
+}
+
+sub cmd__delete_instances {
+    my ($self, @instance_id) = @_;
+    foreach my $instance_id (@instance_id) {
+	$self->gtfs3->delete_instance($instance_id);
+    }
+}
+
+#------------------------------------------------------------------------------
+
 sub gtfs3 {
     my ($self) = @_;
     return $self->{gtfs3} if $self->{gtfs3};
@@ -46,24 +71,50 @@ sub gtfs3 {
     return $self->{gtfs3};
 }
 
+#------------------------------------------------------------------------------
+
+use Getopt::Long;
+
 sub run {
-    my ($self, $command, @arguments) = @_;
+    my ($self, @args) = @_;
+
+    {
+	local *ARGV = \@args;
+	my $p = Getopt::Long::Parser->new();
+	$p->configure("bundling", "gnu_compat");
+	$p->getoptions($self->options);
+    }
+
+    my ($command, @arguments) = @args;
     if (!defined $command) {
 	die("gtfs3: No command specified.\n");
     }
-    my $method = $self->method($command);
+    my $method = $self->METHOD($command);
     if (!$method) {
 	die("gtfs3: $command: command not found.\n");
     }
     $self->$method(@arguments);
 }
 
-sub method {
+sub COMMAND {
+    my ($command, $sub) = @_;
+    my $name = __PACKAGE__->METHOD_NAME($command);
+    no strict "refs";
+    *$name = $sub;
+}
+
+sub METHOD {
+    my ($self, $command) = @_;
+    my $name = __PACKAGE__->METHOD_NAME($command);
+    return $self->can($name);
+}
+
+sub METHOD_NAME {
     my ($self, $command) = @_;
     my $name = $command;
     $name =~ s{-}{_}g;
     $name = "cmd__" . $name;
-    return $self->can($name);
+    return $name;
 }
 
 1;

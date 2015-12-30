@@ -165,9 +165,9 @@ sub load_from_http_response {
     my $cref = $response->content_ref;
     my $o = TransitRealtime::FeedMessage->decode($$cref);
 
-    $self->{pb} = $$ccref;
-    $self->{data} = $o;
-    $self->{data_json} = $self->json->encode($o);
+    $self->{data_pb}     = $$ccref;
+    $self->{data_object} = $o;
+    $self->{data_json}   = $self->json->encode($o);
 
     if ($self->{save_pb}) {
 	$self->save_pb($response, $o);

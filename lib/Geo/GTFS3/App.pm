@@ -42,11 +42,13 @@ sub cmd__list_agencies {
 
 sub cmd__list_routes {
     my ($self, $agency_name, $date) = @_;
+    die("Agency name must be specified.\n") unless defined $agency_name;
     $self->gtfs3->output_list_of_routes($agency_name, $date);
 }
 
 sub cmd__list_trips {
     my ($self, $agency_name, $date) = @_;
+    die("Agency name must be specified.\n") unless defined $agency_name;
     $self->gtfs3->output_list_of_trips($agency_name, $date);
 }
 

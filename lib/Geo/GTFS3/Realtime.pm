@@ -167,7 +167,7 @@ sub load_from_http_response {
 
     $self->{pb} = $$ccref;
     $self->{data} = $o;
-    $self->{json} = $self->json->encode($o);
+    $self->{data_json} = $self->json->encode($o);
 
     if ($self->{save_pb}) {
 	$self->save_pb($response, $o);

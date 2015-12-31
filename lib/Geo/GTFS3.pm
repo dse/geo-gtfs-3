@@ -643,24 +643,8 @@ sub output_list_of_trip_stops {
         select
             st.arrival_time as arrival_time,
             st.departure_time as departure_time,
-            st.stop_sequence as stop_sequence,
-            st.stop_headsign as stop_headsign,
-            st.pickup_type as pickup_type,
-            st.drop_off_type as drop_off_type,
-            st.shape_dist_traveled as shape_dist_traveled,
             st.timepoint as timepoint,
-            s.stop_id as stop_id,
-            s.stop_code as stop_code,
-            s.stop_name as stop_name,
-            s.stop_desc as stop_desc,
-            s.stop_lat as stop_lat,
-            s.stop_lon as stop_lon,
-            s.zone_id as zone_id,
-            s.stop_url as stop_url,
-            s.location_type as location_type,
-            s.parent_station as parent_station,
-            s.stop_timezone as stop_timezone,
-            s.wheelchair_boarding as wheelchair_boarding
+            s.stop_name as stop_name
         from stop_times st
              join stops s on st.stop_id = s.stop_id and st.instance_id = s.instance_id
         where st.instance_id = ? and st.trip_id = ?

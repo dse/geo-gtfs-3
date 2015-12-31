@@ -73,6 +73,17 @@ sub cmd__realtime_json {
     print($self->realtime->{data_json});
 }
 
+sub cmd__list_trip_stops {
+    my ($self, $agency_name, $trip_id, $time_t) = @_;
+    $self->gtfs3->output_list_of_trip_stops($agency_name, $trip_id, $time_t);
+}
+
+sub cmd__check_realtime {
+    my ($self, $url, $agency_name) = @_;
+    $self->realtime->load_from_url($url);
+    $self->realtime->check_trip_updates_against($self->gtfs3, $agency_name);
+}
+
 #------------------------------------------------------------------------------
 
 sub gtfs3 {

@@ -11,6 +11,7 @@ use File::Basename qw(dirname);
 use File::Path qw(make_path);
 use Data::Dumper;
 use YAML;
+use Text::Table;
 
 sub new {
     my ($class) = @_;
@@ -184,6 +185,69 @@ sub load_from_http_response {
 
     return ($o, $response) if wantarray;
     return $o;
+}
+
+sub check_trip_updates_against {
+    my ($self, $gtfs, $agency_name) = @_;
+
+    my $o = $self->{data_object};
+    my $time_t = $o->{header}->{timestamp};
+    my @trips = $gtfs->get_list_of_current_trips($agency_name, $time_t);
+
+    my %scheduled_trips = map { ( $_->{trip_id} => $_ ) } @trips;
+    my @trip_update = map { $_->{trip_update} } grep { $_->{trip_update} } @{$o->{entity}};
+    my %trip_update_trips = map { ( $_->{trip}->{trip_id} => $_) } grep { defined eval { $_->{trip}->{trip_id} } } @trip_update;
+
+    my %trip_ids = map { ( $_ => 1 ) } (keys(%trip_update_trips), keys(%scheduled_trips));
+    my @trip_ids = sort keys %trip_ids;
+
+    my $tb = Text::Table->new(
+	"\nTrip ID",
+	"\nRoute",
+	"\nTrip Headsign",
+	"Sched.\nDepart",
+	"Sched.\nArrive",
+	"\nVehicle",
+	"\nRoute",
+	"\nDelay"
+       );
+
+    foreach my $trip_id (grep { $scheduled_trips{$_} and $trip_update_trips{$_} } @trip_ids) {
+	my $trip = $scheduled_trips{$trip_id};
+	my $trip_update = $trip_update_trips{$trip_id};
+	$tb->add(
+	    @{$trip}{qw(trip_id route_short_name trip_headsign trip_departure_time trip_arrival_time)},
+	    eval { $trip_update->{vehicle}->{label} },
+	    eval { $trip_update->{trip}->{route_id} },
+	    eval { $trip_update->{stop_time_update}->[0]->{departure}->{delay} },
+	   );
+    }
+
+    $tb->add("------");
+
+    foreach my $trip_id (grep { $scheduled_trips{$_} and !$trip_update_trips{$_} } @trip_ids) {
+	my $trip = $scheduled_trips{$trip_id};
+	$tb->add(
+	    @{$trip}{qw(trip_id route_short_name trip_headsign trip_departure_time trip_arrival_time)},
+	    "-", "-", "-"
+	   );
+    }
+
+    $tb->add("------");
+
+    foreach my $trip_id (grep { !$scheduled_trips{$_} and $trip_update_trips{$_} } @trip_ids) {
+	my $trip_update = $trip_update_trips{$trip_id};
+	$tb->add(
+	    $trip_id, "-", "-", "-", "-",
+	    eval { $trip_update->{vehicle}->{label} },
+	    eval { $trip_update->{trip}->{route_id} },
+	    eval { $trip_update->{stop_time_update}->[0]->{departure}->{delay} },
+	   );
+    }
+
+    print($tb->title);
+    print($tb->rule("-"));
+    print($tb->body);
 }
 
 sub json {

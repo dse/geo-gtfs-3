@@ -200,7 +200,7 @@ sub get_instance_id_service_id {
             from agency a
                    join calendar_dates cd on a.instance_id = cd.instance_id
                    join instances i on a.instance_id = i.instance_id
-            where a.agency_name = ? and cd.date = ? and cd.exception_type = 2
+            where a.agency_name = ? and cd.date = ? and cd.exception_type = 1
             order by i.modified desc, i.retrieved desc
         ";
 	my $sth = $self->dbh->prepare($sql);

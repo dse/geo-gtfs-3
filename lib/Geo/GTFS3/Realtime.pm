@@ -203,6 +203,7 @@ sub check_trip_updates_against {
 
     my $tb = Text::Table->new(
 	"\nTrip ID",
+	"\nBlock",
 	"\nRoute",
 	"\nTrip Headsign",
 	"Sched.\nDepart",
@@ -216,7 +217,7 @@ sub check_trip_updates_against {
 	my $trip = $scheduled_trips{$trip_id};
 	my $trip_update = $trip_update_trips{$trip_id};
 	$tb->add(
-	    @{$trip}{qw(trip_id route_short_name trip_headsign trip_departure_time trip_arrival_time)},
+	    @{$trip}{qw(trip_id block_id route_short_name trip_headsign trip_departure_time trip_arrival_time)},
 	    eval { $trip_update->{vehicle}->{label} },
 	    eval { $trip_update->{trip}->{route_id} },
 	    eval { $trip_update->{stop_time_update}->[0]->{departure}->{delay} },
@@ -228,7 +229,7 @@ sub check_trip_updates_against {
     foreach my $trip_id (grep { $scheduled_trips{$_} and !$trip_update_trips{$_} } @trip_ids) {
 	my $trip = $scheduled_trips{$trip_id};
 	$tb->add(
-	    @{$trip}{qw(trip_id route_short_name trip_headsign trip_departure_time trip_arrival_time)},
+	    @{$trip}{qw(trip_id block_id route_short_name trip_headsign trip_departure_time trip_arrival_time)},
 	    "-", "-", "-"
 	   );
     }
@@ -238,7 +239,12 @@ sub check_trip_updates_against {
     foreach my $trip_id (grep { !$scheduled_trips{$_} and $trip_update_trips{$_} } @trip_ids) {
 	my $trip_update = $trip_update_trips{$trip_id};
 	$tb->add(
-	    $trip_id, "-", "-", "-", "-",
+	    "(" . $trip_id . ")",
+	    "-",
+	    "-",
+	    "-",
+	    "-",
+	    "-",
 	    eval { $trip_update->{vehicle}->{label} },
 	    eval { $trip_update->{trip}->{route_id} },
 	    eval { $trip_update->{stop_time_update}->[0]->{departure}->{delay} },

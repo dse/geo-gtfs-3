@@ -209,6 +209,12 @@ sub check_trip_updates_against {
     # The timestamp on the most recently retrieved GTFS-realtime feed.
     my $time_t = $o->{header}->{timestamp};
 
+    # Get the timestamp in "XX:XX:XX" format.
+    my @localtime = localtime($time_t);
+    my ($hh, $mm, $ss) = @localtime[2, 1, 0];
+    my $hhmmss    = sprintf("%02d:%02d:%02d", $hh, $mm, $ss);
+    my $hhmmss_xm = sprintf("%02d:%02d:%02d", $hh + 24, $mm, $ss); # in cases like "00:xx:xx" we also want "24:xx:xx".
+
     # Trips that are scheduled to be running at that time.
     my @scheduled_trips = $gtfs->get_list_of_current_trips($agency_name, $time_t);
 
@@ -259,7 +265,8 @@ sub check_trip_updates_against {
     # trip, we check to see if there's a trip update record for a
     # previous trip on that scheduled trip's block number.  We assume
     # this indicates a vehicle is running late and still operating
-    # that previous trip.
+    # that previous trip.  Another possibility is that a vehicle is
+    # taking recovery time before its next trip.
     my %look_for_block_id;
     foreach my $trip_id (@unaccounted_for_trip_ids) {
 	my $trip = $scheduled_trips{$trip_id};
@@ -273,10 +280,10 @@ sub check_trip_updates_against {
     # scheduled trip.
     my @leftover_trip_update_trip_ids = grep { !$scheduled_trips{$_} and $trip_update_trips{$_} } @trip_ids;
 
-    # We'll divide those trip ID's into three lists.
-    my @leftover_trip_ids_A; # for vehicles running late on trips previous to currently scheduled ones (we found a block number)
-    my @leftover_trip_ids_B; # trips that still have a Stop Time Update record, meaning they're still running a trip of some kind.
-    my @leftover_trip_ids_C; # everything else
+    # We'll divide those trip ID's into three lists.  See below.
+    my @leftover_trip_ids_A;
+    my @leftover_trip_ids_B;
+    my @leftover_trip_ids_C;
 
     # Pull the GTFS trip records for those trip ID's.  We extract the
     # block numbers from them to find vehicles late operating trips
@@ -289,7 +296,9 @@ sub check_trip_updates_against {
 	my $trip_update = $trip_update_trips{$trip_id};
 	if (defined $block_id && $look_for_block_id{$block_id}) {
 	    # We found a vehicle running late on a trip previous to a
-	    # currently scheduled one.
+	    # currently scheduled one.  Or a vehicle done on its
+	    # currently scheduled trip (perhaps a little early) and
+	    # taking recovery time for its next trip.
 	    $found_block_id{$block_id} = 1;
 	    push(@leftover_trip_ids_A, $trip_id);
 	} elsif ($trip_update && $trip_update->{stop_time_update}) {

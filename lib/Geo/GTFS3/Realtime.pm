@@ -222,6 +222,13 @@ sub check_trip_updates_against {
     # An index to trip update records by trip id.
     my %trip_update_trips = map { ( $_->{trip}->{trip_id} => $_) } grep { defined eval { $_->{trip}->{trip_id} } } @trip_update;
 
+    # Vehicle Position records contain timestamps.
+    my @vehicle_position = map { $_->{vehicle} } grep { $_->{vehicle} } @{$o->{entity}};
+
+    # An index to vehicle position records by fleet number (the
+    # vehicle's "label").
+    my %vehicle_position = map { ( $_->{vehicle}->{label} => $_ ) } grep { defined eval { $_->{vehicle}->{label} } } @vehicle_position;
+
     # A list of trip ids that point to a trip update OR a scheduled
     # trip OR both.
     my %trip_ids = map { ( $_ => 1 ) } (keys(%trip_update_trips), keys(%scheduled_trips));
@@ -236,7 +243,8 @@ sub check_trip_updates_against {
 	"Sched.\nArrive",
 	"\nVehicle",
 	"\nRoute",
-	"\nDelay"
+	"\nDelay",
+	"\nFlags"
        );
 
     # A list of trip IDs for scheduled trips that are accounted for by
@@ -302,21 +310,46 @@ sub check_trip_updates_against {
 	my $trip_update_route_id;
 	my $trip_update_delay;
 
+	my @flags;
+
 	if ($trip_update) {
 	    $trip_update_label    = eval { $trip_update->{vehicle}->{label} } // "-";
 	    $trip_update_route_id = eval { $trip_update->{trip}->{route_id} } // "-";
-	    $trip_update_delay    = eval { $trip_update->{stop_time_update}->[0]->{departure}->{delay} } // "-";
+	    if ($trip_update->{stop_time_update} &&
+		  $trip_update->{stop_time_update}->[0]) {
+		$trip_update_delay =
+		  eval { $trip_update->{stop_time_update}->[0]->{departure}->{delay} } // 
+		  eval { $trip_update->{stop_time_update}->[0]->{arrival}->{delay} } //
+		  0;
+		if ($trip_update_delay < 0) {
+		    push(@flags, int(-$trip_update_delay/60 + 0.5) . "m EARLY");
+		} elsif ($trip_update_delay >= 300) {
+		    push(@flags, int($trip_update_delay/60 + 0.5) . "m LATE");
+		}
+	    } else {
+		$trip_update_delay = "-";
+	    }
 	} else {
-	    $trip_update_label    = "NO";
-	    $trip_update_route_id = "TRIP";
-	    $trip_update_delay    = "UPDATE";
+	    push(@flags, "NO TRIP UPDATE");
+	    $trip_update_label    = "-";
+	    $trip_update_route_id = "-";
+	    $trip_update_delay    = "-";
+	}
+
+	my $vehicle_position = $vehicle_position{$trip_update_label};
+	my $vehicle_position_timestamp = $vehicle_position && $vehicle_position->{timestamp};
+	my $vehicle_position_age = defined $vehicle_position_timestamp && $time_t - $vehicle_position_timestamp;
+
+	if ($vehicle_position_age && $vehicle_position_age > 300) {
+	    push(@flags, "INVALID");
 	}
 
 	$tb->add(
 	    @{$trip}{qw(trip_id block_id route_short_name trip_headsign trip_departure_time trip_arrival_time)},
 	    $trip_update_label,
 	    $trip_update_route_id,
-	    $trip_update_delay
+	    $trip_update_delay,
+	    join(", ", @flags)
 	   );
     };
 

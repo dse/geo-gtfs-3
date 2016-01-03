@@ -187,17 +187,43 @@ sub load_from_http_response {
     return $o;
 }
 
+=head2 check_trip_updates_against
+
+    $rt->check_trip_updates_against($gtfs, $agency_name);
+
+where:
+
+    $gtfs         is a Geo::GTFS3 object
+    $agency_name  is an agency name listed in the Geo::GTFS3 database
+
+Checks the most recently retrieved GTFS-realtime feed against the schedule.
+
+=cut
+
 sub check_trip_updates_against {
     my ($self, $gtfs, $agency_name) = @_;
 
+    # The most recently retrieved GTFS-realtime feed.
     my $o = $self->{data_object};
-    my $time_t = $o->{header}->{timestamp};
-    my @trips = $gtfs->get_list_of_current_trips($agency_name, $time_t);
 
-    my %scheduled_trips = map { ( $_->{trip_id} => $_ ) } @trips;
+    # The timestamp on the most recently retrieved GTFS-realtime feed.
+    my $time_t = $o->{header}->{timestamp};
+
+    # Trips that are scheduled to be running at that time.
+    my @scheduled_trips = $gtfs->get_list_of_current_trips($agency_name, $time_t);
+
+    # An index to scheduled trips by trip id.
+    my %scheduled_trips = map { ( $_->{trip_id} => $_ ) } @scheduled_trips;
+
+    # Trip Update records are the ones we want from the GTFS-realtime
+    # feed.
     my @trip_update = map { $_->{trip_update} } grep { $_->{trip_update} } @{$o->{entity}};
+
+    # An index to trip update records by trip id.
     my %trip_update_trips = map { ( $_->{trip}->{trip_id} => $_) } grep { defined eval { $_->{trip}->{trip_id} } } @trip_update;
 
+    # A list of trip ids that point to a trip update OR a scheduled
+    # trip OR both.
     my %trip_ids = map { ( $_ => 1 ) } (keys(%trip_update_trips), keys(%scheduled_trips));
     my @trip_ids = sort keys %trip_ids;
 
@@ -213,42 +239,126 @@ sub check_trip_updates_against {
 	"\nDelay"
        );
 
-    foreach my $trip_id (grep { $scheduled_trips{$_} and $trip_update_trips{$_} } @trip_ids) {
+    # A list of trip IDs for scheduled trips that are accounted for by
+    # a trip update record.
+    my @accounted_for_trip_ids = grep { $scheduled_trips{$_} and $trip_update_trips{$_} } @trip_ids;
+
+    # A list of trip IDs for scheduled trips that are NOT accounted
+    # for by a trip update record.
+    my @unaccounted_for_trip_ids = grep { $scheduled_trips{$_} and !$trip_update_trips{$_} } @trip_ids;
+
+    # If there's no trip update record to account for a scheduled
+    # trip, we check to see if there's a trip update record for a
+    # previous trip on that scheduled trip's block number.  We assume
+    # this indicates a vehicle is running late and still operating
+    # that previous trip.
+    my %look_for_block_id;
+    foreach my $trip_id (@unaccounted_for_trip_ids) {
 	my $trip = $scheduled_trips{$trip_id};
-	my $trip_update = $trip_update_trips{$trip_id};
-	$tb->add(
-	    @{$trip}{qw(trip_id block_id route_short_name trip_headsign trip_departure_time trip_arrival_time)},
-	    eval { $trip_update->{vehicle}->{label} },
-	    eval { $trip_update->{trip}->{route_id} },
-	    eval { $trip_update->{stop_time_update}->[0]->{departure}->{delay} },
-	   );
+	my $block_id = defined $trip ? $trip->{block_id} : undef;
+	$look_for_block_id{$block_id} = 1 if defined $block_id;
     }
 
-    $tb->add("------");
+    my %found_block_id;
 
-    foreach my $trip_id (grep { $scheduled_trips{$_} and !$trip_update_trips{$_} } @trip_ids) {
-	my $trip = $scheduled_trips{$trip_id};
-	$tb->add(
-	    @{$trip}{qw(trip_id block_id route_short_name trip_headsign trip_departure_time trip_arrival_time)},
-	    "-", "-", "-"
-	   );
+    # A list of trip IDs for trip update records that are NOT on a
+    # scheduled trip.
+    my @leftover_trip_update_trip_ids = grep { !$scheduled_trips{$_} and $trip_update_trips{$_} } @trip_ids;
+
+    # We'll divide those trip ID's into three lists.
+    my @leftover_trip_ids_A; # for vehicles running late on trips previous to currently scheduled ones (we found a block number)
+    my @leftover_trip_ids_B; # trips that still have a Stop Time Update record, meaning they're still running a trip of some kind.
+    my @leftover_trip_ids_C; # everything else
+
+    # Pull the GTFS trip records for those trip ID's.  We extract the
+    # block numbers from them to find vehicles late operating trips
+    # previous to the ones they're scheduled to operate.
+    my %leftover_trips;
+    foreach my $trip_id (@leftover_trip_update_trip_ids) {
+	my $trip = $gtfs->get_trip_by_trip_id($trip_id, $agency_name, $time_t);
+	$leftover_trips{$trip_id} = $trip;
+	my $block_id = $trip ? $trip->{block_id} : undef;
+	my $trip_update = $trip_update_trips{$trip_id};
+	if (defined $block_id && $look_for_block_id{$block_id}) {
+	    # We found a vehicle running late on a trip previous to a
+	    # currently scheduled one.
+	    $found_block_id{$block_id} = 1;
+	    push(@leftover_trip_ids_A, $trip_id);
+	} elsif ($trip_update && $trip_update->{stop_time_update}) {
+	    # Probably a bus taking recovery time.
+	    push(@leftover_trip_ids_B, $trip_id);
+	} else {
+	    # Probably a bus that's completed its last trip.
+	    push(@leftover_trip_ids_C, $trip_id);
+	}
     }
 
-    $tb->add("------");
+    #------------------------------------------------------------------------------
 
-    foreach my $trip_id (grep { !$scheduled_trips{$_} and $trip_update_trips{$_} } @trip_ids) {
-	my $trip_update = $trip_update_trips{$trip_id};
+    my $add_row = sub {
+	my ($trip, $trip_update) = @_;
+
+	my $trip_update_label;
+	my $trip_update_route_id;
+	my $trip_update_delay;
+
+	if ($trip_update) {
+	    $trip_update_label    = eval { $trip_update->{vehicle}->{label} } // "-";
+	    $trip_update_route_id = eval { $trip_update->{trip}->{route_id} } // "-";
+	    $trip_update_delay    = eval { $trip_update->{stop_time_update}->[0]->{departure}->{delay} } // "-";
+	} else {
+	    $trip_update_label    = "NO";
+	    $trip_update_route_id = "TRIP";
+	    $trip_update_delay    = "UPDATE";
+	}
+
 	$tb->add(
-	    "(" . $trip_id . ")",
-	    "-",
-	    "-",
-	    "-",
-	    "-",
-	    "-",
-	    eval { $trip_update->{vehicle}->{label} },
-	    eval { $trip_update->{trip}->{route_id} },
-	    eval { $trip_update->{stop_time_update}->[0]->{departure}->{delay} },
+	    @{$trip}{qw(trip_id block_id route_short_name trip_headsign trip_departure_time trip_arrival_time)},
+	    $trip_update_label,
+	    $trip_update_route_id,
+	    $trip_update_delay
 	   );
+    };
+
+    foreach my $trip_id (@accounted_for_trip_ids) {
+	my $trip = $scheduled_trips{$trip_id};
+	my $trip_update = $trip_update_trips{$trip_id};
+	$add_row->($trip, $trip_update);
+    }
+
+    if (@unaccounted_for_trip_ids) {
+	$tb->add("?");
+	foreach my $trip_id (@unaccounted_for_trip_ids) {
+	    my $trip = $scheduled_trips{$trip_id};
+	    $add_row->($trip, undef);
+	}
+    }
+
+    if (@leftover_trip_ids_A) {
+	$tb->add("A");
+	foreach my $trip_id (@leftover_trip_ids_A) {
+	    my $trip_update = $trip_update_trips{$trip_id};
+	    my $trip = $leftover_trips{$trip_id};
+	    $add_row->($trip, $trip_update);
+	}
+    }
+
+    if (@leftover_trip_ids_B) {
+	$tb->add("B");
+	foreach my $trip_id (@leftover_trip_ids_B) {
+	    my $trip_update = $trip_update_trips{$trip_id};
+	    my $trip = $leftover_trips{$trip_id};
+	    $add_row->($trip, $trip_update);
+	}
+    }
+
+    if (@leftover_trip_ids_C) {
+	$tb->add("C");
+	foreach my $trip_id (@leftover_trip_ids_C) {
+	    my $trip_update = $trip_update_trips{$trip_id};
+	    my $trip = $leftover_trips{$trip_id};
+	    $add_row->($trip, $trip_update);
+	}
     }
 
     print($tb->title);

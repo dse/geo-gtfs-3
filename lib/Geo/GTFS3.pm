@@ -22,6 +22,7 @@ use feature qw(say);
 our @TABLES;
 our %TABLES;
 our %INDEXES;
+our %NORMALIZE;
 
 sub new {
     my ($class) = @_;
@@ -123,11 +124,18 @@ sub load_from_zip {
 	my $filename = $member->fileName();
 	my $basename = basename($filename, ".txt");
 	my $table_name = "$basename";
+	my $normalize = $NORMALIZE{$table_name};
 	my $fh = Archive::Zip::MemberRead->new($zip, $filename);
 	my $csv = Text::CSV_XS->new ({ binary => 1 });
 	my $fields = $csv->getline($fh);
 	die("no fields in member $filename of $filename\n")
 	  unless $fields or scalar(@$fields);
+
+	my %fi;			# hash of field name => field index
+	foreach my $i (0 .. $#$fields) {
+	    $fi{$fields->[$i]} = $i;
+	}
+
 	my $sql = sprintf("insert into $table_name(instance_id, %s) values(?, %s);",
 			  join(", ", @$fields),
 			  join(", ", ("?") x scalar(@$fields)));
@@ -138,6 +146,15 @@ sub load_from_zip {
 	
 	my $rows = 0;
 	while (defined(my $data = $csv->getline($fh))) {
+	    if ($normalize) {
+		foreach my $fn (keys(%$normalize)) {
+		    my $n = $normalize->{$fn};
+		    my $fi = $fi{$fn};
+		    for ($data->[$fi]) {
+			$n->();
+		    }
+		}
+	    }
 	    $sth->execute($instance_id, @$data);
 	    $rows += 1;
 	    if ($rows % 100 == 0) {
@@ -278,6 +295,42 @@ sub get_list_of_current_trips {
     return @rows;
 }
 
+sub get_trip_by_trip_id {
+    my ($self, $trip_id, $agency_name, $time_t) = @_;
+    $time_t //= time();
+
+    my $yesterday_time_t = parsedate("yesterday", NOW => $time_t);
+
+    my ($instance_id,    $service_id   ) = $self->get_instance_id_service_id($agency_name, $time_t);
+    my ($instance_id_xm, $service_id_xm) = $self->get_instance_id_service_id($agency_name, $yesterday_time_t);
+
+    my $sql = "
+	select   t.trip_id		 as trip_id,
+                 min(st.departure_time)	 as trip_departure_time,
+                 max(st.arrival_time)	 as trip_arrival_time,
+		 t.trip_headsign	 as trip_headsign,
+		 t.trip_short_name	 as trip_short_name,
+		 t.direction_id		 as direction_id,
+		 t.block_id		 as block_id,
+		 r.route_id		 as route_id,
+		 r.route_short_name	 as route_short_name,
+		 r.route_long_name	 as route_long_name,
+                 t.instance_id		 as instance_id,
+                 t.service_id		 as service_id
+        from     stop_times st
+                 join trips t on st.trip_id = t.trip_id
+                                 and st.instance_id = t.instance_id
+		 join routes r on t.route_id = r.route_id
+                                  and t.instance_id = r.instance_id
+        where    t.instance_id = ? and t.trip_id = ?
+        group by t.trip_id
+	order by r.route_id, t.direction_id, trip_departure_time
+    ";
+    my $sth = $self->dbh->prepare($sql);
+    $sth->execute($instance_id, $trip_id);
+    return $sth->fetchrow_hashref;
+}
+
 sub ua {
     my ($self) = @_;
     return $self->{ua} if $self->{ua};
@@ -406,6 +459,12 @@ BEGIN {
             timepoint             integer        null
         );
     ";
+    $NORMALIZE{stop_times}{arrival_time} = $NORMALIZE{stop_times}{departure_time} = sub {
+	# " x:xx:xx" => "0x:xx:xx"
+	# "x:xx:xx"  => "0x:xx:xx"
+	s{^ }{0};
+	s{^(\d):}{0$1:};
+    };
     $INDEXES{stop_times} = [
         "create index if not exists stop_times__instance_id   on stop_times(instance_id);",
         "create index if not exists stop_times__trip_id       on stop_times(trip_id);",
@@ -625,9 +684,9 @@ sub output_list_of_trips {
 
     my @trips = $self->get_list_of_current_trips($agency_name, $time_t);
 
-    my $tb = Text::Table->new("Trip ID", "Route", "Headsign", "Depart", "Arrive");
+    my $tb = Text::Table->new("Trip ID", "Block ID", "Route", "Headsign", "Depart", "Arrive");
     foreach my $trip (@trips) {
-	$tb->add(@{$trip}{qw(trip_id route_short_name trip_headsign trip_departure_time trip_arrival_time)});
+	$tb->add(@{$trip}{qw(trip_id block_id route_short_name trip_headsign trip_departure_time trip_arrival_time)});
     }
     print($tb->title);
     print($tb->rule("-"));

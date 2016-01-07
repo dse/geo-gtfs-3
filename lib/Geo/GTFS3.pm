@@ -231,45 +231,55 @@ BEGIN {
 			    friday saturday);
 }
 
-sub get_instance_id_service_id {
+sub get_instance_id_service_ids {
     my ($self, $agency_name, $date) = @_;
     $date //= time();
     my @localtime = localtime($date);
     my $wday = $localtime[6];
     my $column_name = $WDAY_COLUMN_NAMES[$wday];
     my $yyyymmdd = strftime("%Y%m%d", @localtime);
+
+    my $instance_id = $self->get_instance_id($agency_name, $date);
+    warn("Instance ID: $instance_id\n");
+    my %service_id;
+    
     {
 	my $sql = "
-            select a.instance_id as instance_id, cd.service_id as service_id
-            from agency a
-                   join calendar_dates cd on a.instance_id = cd.instance_id
-                   join instances i on a.instance_id = i.instance_id
-            where a.agency_name = ? and cd.date = ? and cd.exception_type = 1
-            order by i.modified desc, i.retrieved desc
-        ";
-	my $sth = $self->dbh->prepare($sql);
-	$sth->execute($agency_name, $yyyymmdd);
-	my $row = $sth->fetchrow_hashref();
-	if ($row) {
-	    return ($row->{instance_id}, $row->{service_id}, 1);
-	}
-    }
-    {
-	my $sql = "
-            select a.instance_id as instance_id, c.service_id as service_id
+            select c.service_id as service_id
             from agency a
                    join calendar c on a.instance_id = c.instance_id
                    join instances i on a.instance_id = i.instance_id
-            where $column_name and a.agency_name = ? and ? between c.start_date and c.end_date
-            order by i.modified desc, i.retrieved desc
+            where $column_name and a.agency_name = ? and ? between c.start_date and c.end_date and a.instance_id = ?
         ";
 	my $sth = $self->dbh->prepare($sql);
-	$sth->execute($agency_name, $yyyymmdd);
-	my $row = $sth->fetchrow_hashref();
-	if ($row) {
-	    return ($row->{instance_id}, $row->{service_id});
+	$sth->execute($agency_name, $yyyymmdd, $instance_id);
+	while (my $row = $sth->fetchrow_hashref()) {
+	    $service_id{$row->{service_id}} = 1;
 	}
     }
+
+    {
+	my $sql = "
+            select cd.service_id as service_id, cd.exception_type as exception_type
+            from agency a
+                   join calendar_dates cd on a.instance_id = cd.instance_id
+                   join instances i on a.instance_id = i.instance_id
+            where a.agency_name = ? and cd.date = ? and a.instance_id = ?
+        ";
+	my $sth = $self->dbh->prepare($sql);
+	$sth->execute($agency_name, $yyyymmdd, $instance_id);
+	while (my $row = $sth->fetchrow_hashref()) {
+	    if ($row->{exception_type} == 2) {
+		delete $service_id{$row->{service_id}};
+	    } else {
+		$service_id{$row->{service_id}} = 1;
+	    }
+	}
+    }
+
+    my @service_id = sort keys %service_id;
+    warn("Service ID: @service_id\n");
+    return ($instance_id, @service_id);
 }
 
 sub get_list_of_current_trips {
@@ -283,12 +293,12 @@ sub get_list_of_current_trips {
 
     my $yesterday_time_t = parsedate("yesterday", NOW => $time_t);
 
-    my ($instance_id,    $service_id   ) = $self->get_instance_id_service_id($agency_name, $time_t);
-    my ($instance_id_xm, $service_id_xm) = $self->get_instance_id_service_id($agency_name, $yesterday_time_t);
+    my ($instance_id,    @service_id   ) = $self->get_instance_id_service_ids($agency_name, $time_t);
+    my ($instance_id_xm, @service_id_xm) = $self->get_instance_id_service_ids($agency_name, $yesterday_time_t);
 
     if ($self->{verbose} >= 2) {
-	warn("Instance ID: $instance_id; Service ID: $service_id\n");
-	warn("Instance ID 2: $instance_id_xm; Service ID 2: $service_id_xm\n");
+	warn("Instance ID: $instance_id; Service ID: @service_id\n");
+	warn("Instance ID 2: $instance_id_xm; Service ID 2: @service_id_xm\n");
     }
 
     my $sql = "
@@ -316,13 +326,17 @@ sub get_list_of_current_trips {
     ";
     my $sth = $self->dbh->prepare($sql);
     my @rows;
-    $sth->execute($instance_id_xm, $service_id_xm, $hhmmss_xm, $hhmmss_xm);
-    while (my $row = $sth->fetchrow_hashref()) {
-	push(@rows, $row);
+    foreach my $service_id_xm (@service_id_xm) {
+	$sth->execute($instance_id_xm, $service_id_xm, $hhmmss_xm, $hhmmss_xm);
+	while (my $row = $sth->fetchrow_hashref()) {
+	    push(@rows, $row);
+	}
     }
-    $sth->execute($instance_id, $service_id, $hhmmss, $hhmmss);
-    while (my $row = $sth->fetchrow_hashref()) {
-	push(@rows, $row);
+    foreach my $service_id (@service_id) {
+	$sth->execute($instance_id, $service_id, $hhmmss, $hhmmss);
+	while (my $row = $sth->fetchrow_hashref()) {
+	    push(@rows, $row);
+	}
     }
     return @rows;
 }
@@ -333,8 +347,8 @@ sub get_trip_by_trip_id {
 
     my $yesterday_time_t = parsedate("yesterday", NOW => $time_t);
 
-    my ($instance_id,    $service_id   ) = $self->get_instance_id_service_id($agency_name, $time_t);
-    my ($instance_id_xm, $service_id_xm) = $self->get_instance_id_service_id($agency_name, $yesterday_time_t);
+    my ($instance_id,    @service_id   ) = $self->get_instance_id_service_ids($agency_name, $time_t);
+    my ($instance_id_xm, @service_id_xm) = $self->get_instance_id_service_ids($agency_name, $yesterday_time_t);
 
     my $sql = "
 	select   t.trip_id		 as trip_id,
@@ -686,7 +700,7 @@ sub output_list_of_routes {
     my ($self, $agency_name, $time_t) = @_;
     $time_t //= time();
 
-    my ($instance_id, $service_id) = $self->get_instance_id_service_id($agency_name, $time_t);
+    my ($instance_id, @service_id) = $self->get_instance_id_service_ids($agency_name, $time_t);
     my $sql = "
         select r.route_id		as route_id,
                r.route_short_name	as route_short_name,
@@ -704,6 +718,7 @@ sub output_list_of_routes {
         where  r.instance_id = ?
     ";
     my $sth = $self->dbh->prepare($sql);
+    warn($instance_id);
     $sth->execute($instance_id);
     while (my $row = $sth->fetchrow_hashref()) {
 	printf("%-8s %s\n", $row->{route_short_name}, $row->{route_long_name});
@@ -729,7 +744,7 @@ sub output_list_of_trip_stops {
     my ($self, $agency_name, $trip_id, $time_t) = @_;
     $time_t //= time();
 
-    my ($instance_id, $service_id) = $self->get_instance_id_service_id($agency_name, $time_t);
+    my ($instance_id, @service_id) = $self->get_instance_id_service_ids($agency_name, $time_t);
     my $sql = "
         select
             st.arrival_time as arrival_time,
@@ -796,6 +811,46 @@ sub output_list_of_instances {
                  end_date
     ";
     $self->output_select($sql);
+}
+
+sub get_instance_id {
+    my ($self, $agency_name, $date) = @_;
+    $date //= time();
+    my @localtime = localtime($date);
+    my $wday = $localtime[6];
+    my $column_name = $WDAY_COLUMN_NAMES[$wday];
+    my $yyyymmdd = strftime("%Y%m%d", @localtime);
+
+    my $sql = "
+        select   i.instance_id   as instance_id,
+                 i.url           as url,
+                 i.modified      as modified,
+                 i.length        as length,
+                 i.etag          as etag,
+                 i.retrieved     as retrieved,
+                 i.filename      as filename,
+                 a.start_date    as start_date,
+                 a.end_date      as end_date
+        from     instances i
+                 join (
+                     select instance_id, min(start_date) as start_date, max(end_date) as end_date
+                     from (
+                         select instance_id, start_date, end_date
+                         from   calendar
+                         union  
+                         select instance_id, `date` as start_date, `date` as end_date
+                         from   calendar_dates
+                     )
+                     group by instance_id
+                 ) a on i.instance_id = a.instance_id
+        where    ? between a.start_date and a.end_date
+        order by i.modified desc, i.retrieved desc
+    ";
+    my $sth = $self->dbh->prepare($sql);
+    $sth->execute($yyyymmdd);
+    my $row = $sth->fetchrow_hashref();
+    return unless defined $row;
+    return $row->{instance_id};
 }
 
 sub output_table {

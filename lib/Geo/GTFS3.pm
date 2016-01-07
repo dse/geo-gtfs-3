@@ -224,7 +224,7 @@ sub recreate_instance {
     $sth->execute($instance_id, $url, $last_modified, $length, $etag, $retrieved, $filename);
 }
 
-# table column names in the 
+# table column names in the database
 our @WDAY_COLUMN_NAMES;
 BEGIN {
     @WDAY_COLUMN_NAMES = qw(sunday monday tuesday wednesday thursday

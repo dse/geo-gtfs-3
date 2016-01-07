@@ -53,8 +53,13 @@ sub dbh {
     return $self->{dbh};
 }
 
+sub reload_from_url {
+    my ($self, $url) = @_;
+    $self->load_from_url($url, reload => 1);
+}
+
 sub load_from_url {
-    my ($self, $url, $inactive) = @_;
+    my ($self, $url, %args) = @_;
     HTTP::Cache::Transparent::init({ BasePath => $self->{http_cache_dir} });
     my $request = HTTP::Request->new("GET", $url);
     my $response = $self->ua->request($request);
@@ -68,11 +73,11 @@ sub load_from_url {
 	warn(sprintf("  %s\n", $response->base)) if $response->base ne $url;
 	warn(sprintf("  %s\n", $response->status_line));
     }
-    $self->load_from_http_response($response, $inactive);
+    $self->load_from_http_response($response, %args);
 }
 
 sub load_from_http_response {
-    my ($self, $response, $inactive) = @_;
+    my ($self, $response, %args) = @_;
 
     my $url           = $response->base;
     my $last_modified = $response->last_modified;
@@ -94,18 +99,28 @@ sub load_from_http_response {
     my $instance = $self->get_instance($url, $last_modified, $length, $etag);
     if ($instance) {
 	my $instance_id = $instance->{instance_id};
-	warn("Already in database as instance_id $instance_id\n");
+	if ($args{reload}) {
+	    warn("Deleting existing instance $instance_id ...\n");
+	    $self->delete_instance($instance_id);
+	    my $retrieved = $response->date;
+	    $self->recreate_instance($instance_id, $url, $last_modified, $length, $etag,
+				     $retrieved, $filename);
+	    warn("Reloading instance $instance_id ...\n");
+	    $self->load_from_zip($instance_id, $filename, %args);
+	} else {
+	    warn("Already in database as instance_id $instance_id\n");
+	}
     } else {
 	my $retrieved = $response->date;
 	my $instance_id = $self->create_instance($url, $last_modified, $length, $etag,
 						 $retrieved, $filename);
 	warn("Created new instance id: $instance_id\n");
-	$self->load_from_zip($instance_id, $filename, $inactive);
+	$self->load_from_zip($instance_id, $filename, %args);
     }
 }
 
 sub load_from_zip {
-    my ($self, $instance_id, $filename, $inactive) = @_;
+    my ($self, $instance_id, $filename, %args) = @_;
     my $zip = Archive::Zip->new();
     unless ($zip->read($filename) == AZ_OK) {
 	die("zip read error $filename\n");
@@ -197,6 +212,18 @@ sub create_instance {
     return $id;
 }
 
+sub recreate_instance {
+    my ($self, $instance_id, $url, $last_modified, $length, $etag, $retrieved, $filename) = @_;
+    my $sql = "
+        insert into instances(
+            instance_id, url, modified, length, etag, retrieved, filename
+        )
+        values(?, ?, ?, ?, ?, ?, ?);
+    ";
+    my $sth = $self->dbh->prepare($sql);
+    $sth->execute($instance_id, $url, $last_modified, $length, $etag, $retrieved, $filename);
+}
+
 # table column names in the 
 our @WDAY_COLUMN_NAMES;
 BEGIN {
@@ -258,6 +285,11 @@ sub get_list_of_current_trips {
 
     my ($instance_id,    $service_id   ) = $self->get_instance_id_service_id($agency_name, $time_t);
     my ($instance_id_xm, $service_id_xm) = $self->get_instance_id_service_id($agency_name, $yesterday_time_t);
+
+    if ($self->{verbose} >= 2) {
+	warn("Instance ID: $instance_id; Service ID: $service_id\n");
+	warn("Instance ID 2: $instance_id_xm; Service ID 2: $service_id_xm\n");
+    }
 
     my $sql = "
 	select   t.trip_id		 as trip_id,

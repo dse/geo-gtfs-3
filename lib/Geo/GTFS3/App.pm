@@ -29,13 +29,18 @@ commands:
   gtfs3 load FEEDURL
   gtfs3 list-routes AGENCYNAME [DATE]
   gtfs3 list-instances
-  gtfs3 delete-instances INSTANCEID [...]
+  gtfs3 delete-instance INSTANCEID [...]
   gtfs3 realtime-json URL
 END
 
 COMMAND("load", sub {
 	    my ($self, $url) = @_;
 	    $self->gtfs3->load_from_url($url);
+	});
+
+COMMAND("reload", sub {
+	    my ($self, $url) = @_;
+	    $self->gtfs3->reload_from_url($url);
 	});
 
 sub cmd__list_agencies {
@@ -60,6 +65,9 @@ sub cmd__list_instances {
     $self->gtfs3->output_list_of_instances();
 }
 
+sub cmd__delete_instance {
+    goto &cmd__delete_instances;
+}
 sub cmd__delete_instances {
     my ($self, @instance_id) = @_;
     foreach my $instance_id (@instance_id) {

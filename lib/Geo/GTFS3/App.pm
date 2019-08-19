@@ -31,6 +31,8 @@ commands:
   gtfs3 list-instances
   gtfs3 delete-instance INSTANCEID [...]
   gtfs3 realtime-json URL
+  gtfs3 check-realtime URL AGENCYNAME
+  gtfs3 list-stops AGENCYNAME [DATE]
 END
 
 COMMAND("load", sub {
@@ -52,6 +54,12 @@ sub cmd__list_routes {
     my ($self, $agency_name, $date) = @_;
     die("Agency name must be specified.\n") unless defined $agency_name;
     $self->gtfs3->output_list_of_routes($agency_name, $date);
+}
+
+sub cmd__list_stops {
+    my ($self, $agency_name, $date) = @_;
+    die("Agency name must be specified.\n") unless defined $agency_name;
+    $self->gtfs3->output_list_of_stops($agency_name, $date);
 }
 
 sub cmd__list_trips {

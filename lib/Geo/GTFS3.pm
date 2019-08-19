@@ -233,8 +233,12 @@ BEGIN {
 
 sub get_instance_id_service_ids {
     my ($self, $agency_name, $date) = @_;
-    $date //= time();
-    my @localtime = localtime($date);
+    my $time_t = defined $date ? parsedate($date) : time();
+    if (!defined $time_t) {
+        warn("Invalid timestamp: $date\n");
+        return;
+    }
+    my @localtime = localtime($time_t);
     my $wday = $localtime[6];
     my $column_name = $WDAY_COLUMN_NAMES[$wday];
     my $yyyymmdd = strftime("%Y%m%d", @localtime);
@@ -725,6 +729,30 @@ sub output_list_of_routes {
     }
 }
 
+sub output_list_of_stops {
+    my ($self, $agency_name, $time_t) = @_;
+    $time_t //= time();
+
+    my ($instance_id, @service_id) = $self->get_instance_id_service_ids($agency_name, $time_t);
+    my $sql = "
+        select   s.stop_id as stop_id,
+                 s.stop_code as stop_code,
+                 s.stop_name as stop_name,
+                 s.stop_desc as stop_desc,
+                 s.stop_lat as stop_lat,
+                 s.stop_lon as stop_lon
+        from     stops s
+        where    s.instance_id = ?
+        order by s.stop_name
+    ";
+    my $sth = $self->dbh->prepare($sql);
+    warn($instance_id);
+    $sth->execute($instance_id);
+    while (my $row = $sth->fetchrow_hashref()) {
+        printf("%s\n", $row->{stop_name});
+    }
+}
+
 sub output_list_of_trips {
     my ($self, $agency_name, $time_t) = @_;
     $time_t //= time();
@@ -815,8 +843,12 @@ sub output_list_of_instances {
 
 sub get_instance_id {
     my ($self, $agency_name, $date) = @_;
-    $date //= time();
-    my @localtime = localtime($date);
+    my $time_t = defined $date ? parsedate($date) : time();
+    if (!defined $time_t) {
+        warn("Invalid timestamp: $date\n");
+        return;
+    }
+    my @localtime = localtime($time_t);
     my $wday = $localtime[6];
     my $column_name = $WDAY_COLUMN_NAMES[$wday];
     my $yyyymmdd = strftime("%Y%m%d", @localtime);
